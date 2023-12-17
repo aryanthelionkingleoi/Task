@@ -1,0 +1,158 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+@model List<QuestionModel>
+<script src="~/lib/jquery/dist/jquery.js"></script>
+<div class="text-center">
+    <h1>Questionnaire</h1>
+
+    <label>Area</label>
+    <select id="areaDropdown" onchange="loadSections()">
+        @foreach (var area in ViewBag.Areas)
+        {
+            <option value="@area">@area</option>
+        }
+    </select>
+    <br />  <br />
+    <label>Section</label>
+    <select id="sectionDropdown" onchange="loadSubsections()">
+        @foreach (var sect in ViewBag.Sections)
+        {
+            <option value="@sect">@sect</option>
+        }
+    </select>
+    <br />  <br />
+    <label>Sub Section</label>
+    <select id="subsectionDropdown" onchange="loadQuestions()">
+        @foreach (var subsection in ViewBag.Subsections)
+        {
+            <option value="@subsection">@subsection</option>
+        }
+    </select>
+    <br />  <br />
+    <div id="questionsContainer"></div>
+    <br />
+    <button onclick="navigate('prev')">Previous</button>
+    <button onclick="navigate('next')">Next</button>
+
+    <script>
+        var currentIndex = 0;
+        var selectedArea;
+        var selectedSection;
+        var selectedSubsection;
+        var questions = @Html.Raw(Json.Serialize(Model));
+
+        function loadSections() {
+            selectedArea = $("#areaDropdown").val();
+            $.post("/Home/GetSections", { selectedArea: selectedArea }, function (data) {
+                populateDropdown("#sectionDropdown", data);
+                selectedSection = $("#sectionDropdown").val();
+                loadSubsections();
+            });
+        }
+
+        function loadSubsections() {
+            $.post("/Home/GetSubsections", { selectedArea: selectedArea, selectedSection: selectedSection }, function (data) {
+                populateDropdown("#subsectionDropdown", data);
+                selectedSubsection = $("#subsectionDropdown").val();
+                loadQuestions();
+            });
+        }
+
+        function loadQuestions() {
+            $.post("/Home/GetQuestions", { selectedArea: selectedArea, selectedSection: selectedSection, selectedSubsection: selectedSubsection }, function (data) {
+                questions = data;
+                currentIndex = 0;
+                showCurrentQuestion();
+            }).fail(function () {
+                console.error("Failed to load questions.");
+            });
+        }
+
+        function populateDropdown(dropdownId, data) {
+            var dropdown = $(dropdownId);
+            dropdown.empty();
+            $.each(data, function (index, item) {
+                dropdown.append($("<option>").text(item).val(item));
+            });
+        }
+
+        function showCurrentQuestion() {
+            if (questions.length > 0) {
+                var currentQuestion = questions[currentIndex];
+                $("#questionsContainer").html("<b>Point " + currentQuestion.questionNumber + " " + (currentQuestion ? currentQuestion.question : "Undefined") + "</b>");
+                if (currentIndex === questions.length - 1 || !questions[currentIndex + 1] || questions[currentIndex + 1].subsection !== selectedSubsection) {
+                    var subsectionDropdown = $("#subsectionDropdown");
+                    var nextSubsectionIndex = subsectionDropdown.prop("selectedIndex") + 1;
+                    if (nextSubsectionIndex < subsectionDropdown.find("option").length) {
+                        selectedSubsection = subsectionDropdown.val();
+                        subsectionDropdown.prop("selectedIndex", nextSubsectionIndex).trigger('change');
+                        loadQuestions();
+                        return;
+                    }
+                }
+                if (currentIndex === questions.length - 1 || !questions[currentIndex + 1] || questions[currentIndex + 1].section !== selectedSection) {
+                    var sectionDropdown = $("#sectionDropdown");
+                    var nextSectionIndex = sectionDropdown.prop("selectedIndex") + 1;
+                    if (nextSectionIndex < sectionDropdown.find("option").length) {
+                        selectedSection = sectionDropdown.val();
+                        sectionDropdown.prop("selectedIndex", nextSectionIndex).trigger('change');
+                        loadSubsections();
+                        return;
+                    }
+                }
+                if (currentIndex === questions.length - 1 || !questions[currentIndex + 1] || questions[currentIndex + 1].area !== selectedArea) {
+                    var areaDropdown = $("#areaDropdown");
+                    var nextAreaIndex = areaDropdown.prop("selectedIndex") + 1;
+                    if (nextAreaIndex < areaDropdown.find("option").length) {
+                        selectedArea = areaDropdown.val();
+                        areaDropdown.prop("selectedIndex", nextAreaIndex).trigger('change');
+                        loadSections();
+                        return;
+                    }
+                }
+            } else {
+                $("#questionsContainer").html("<p>No questions available.</p>");
+            }
+        }
+
+        function navigate(direction) {
+            if (direction === 'next' && currentIndex < questions.length - 1) {
+                currentIndex++;
+                showCurrentQuestion();
+            } else if (direction === 'prev' && currentIndex > 0) {
+                currentIndex--;
+                showCurrentQuestion();
+            } else if (direction === 'prev' && currentIndex === 0) {
+
+            }
+        }
+
+        $(document).ready(function () {
+            loadSections();
+            showCurrentQuestion();
+        });
+
+        $("#areaDropdown").change(function () {
+            loadSections();
+        });
+
+        $("#sectionDropdown").change(function () {
+            selectedSection = $(this).val();
+            loadSubsections();
+        });
+
+        $("#subsectionDropdown").change(function () {
+            selectedSubsection = $(this).val();
+            loadQuestions();
+        });
+
+        $("#prevButton").click(function () {
+            navigate('prev');
+        });
+
+        $("#nextButton").click(function () {
+            navigate('next');
+        });
+    </script>
+</div>
